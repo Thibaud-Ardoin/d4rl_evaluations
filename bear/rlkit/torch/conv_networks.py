@@ -23,7 +23,7 @@ class CNN(nn.Module):
             batch_norm_fc=False,
             init_w=1e-4,
             hidden_init=nn.init.xavier_uniform_,
-            hidden_activation=nn.ReLU(),
+            hidden_activation=nn.ReLU(inplace=False),
             output_activation=identity,
     ):
         if hidden_sizes is None:
@@ -153,7 +153,7 @@ class TwoHeadDCNN(nn.Module):
             batch_norm_fc=False,
             init_w=1e-3,
             hidden_init=nn.init.xavier_uniform_,
-            hidden_activation=nn.ReLU(),
+            hidden_activation=nn.ReLU(inplace=False),
             output_activation=identity,
     ):
         assert len(kernel_sizes) == \

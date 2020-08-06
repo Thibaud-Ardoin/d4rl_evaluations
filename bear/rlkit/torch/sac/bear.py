@@ -34,7 +34,7 @@ class BEARTrainer(TorchTrainer):
         render_eval_paths=False,
 
         # BEAR specific params
-        mode='auto',
+        mode='auto',#'auto',
         kernel_choice='laplacian',
         policy_update_style=0,
         mmd_sigma=10.0,
@@ -100,11 +100,11 @@ class BEARTrainer(TorchTrainer):
         self._policy_update_ctr = 0
         self._num_q_update_steps = 0
         self._num_policy_update_steps = 0
-        
+
     def eval_q_custom(self, custom_policy, data_batch, q_function=None):
         if q_function is None:
             q_function = self.qf1
-        
+
         obs = data_batch['observations']
         # Evaluate policy Loss
         new_obs_actions, policy_mean, policy_log_std, log_pi, *_ = self.policy(
@@ -112,7 +112,7 @@ class BEARTrainer(TorchTrainer):
         )
         q_new_actions = q_function(obs, new_obs_actions)
         return float(q_new_actions.mean().detach().cpu().numpy())
-    
+
     def mmd_loss_laplacian(self, samples1, samples2, sigma=0.2):
         """MMD constraint with Laplacian kernel for support matching"""
         # sigma is set to 20.0 for hopper, cheetah and 50 for walker/ant
@@ -127,7 +127,7 @@ class BEARTrainer(TorchTrainer):
 
         overall_loss = (diff_x_x + diff_y_y - 2.0 * diff_x_y + 1e-6).sqrt()
         return overall_loss
-    
+
     def mmd_loss_gaussian(self, samples1, samples2, sigma=0.2):
         """MMD constraint with Gaussian Kernel support matching"""
         # sigma is set to 20.0 for hopper, cheetah and 50 for walker/ant
@@ -170,23 +170,23 @@ class BEARTrainer(TorchTrainer):
         with torch.no_grad():
             # Duplicate state 10 times (10 is a hyperparameter chosen by BCQ)
             state_rep = next_obs.unsqueeze(1).repeat(1, 10, 1).view(next_obs.shape[0]*10, next_obs.shape[1])
-            
+
             # Compute value of perturbed actions sampled from the VAE
             action_rep = self.policy(state_rep)[0]
             target_qf1 = self.target_qf1(state_rep, action_rep)
             target_qf2 = self.target_qf2(state_rep, action_rep)
 
-            # Soft Clipped Double Q-learning 
+            # Soft Clipped Double Q-learning
             target_Q = 0.75 * torch.min(target_qf1, target_qf2) + 0.25 * torch.max(target_qf1, target_qf2)
             target_Q = target_Q.view(next_obs.shape[0], -1).max(1)[0].view(-1, 1)
             target_Q = self.reward_scale * rewards + (1.0 - terminals) * self.discount * target_Q
-        
+
         qf1_pred = self.qf1(obs, actions)
         qf2_pred = self.qf2(obs, actions)
 
         qf1_loss = (qf1_pred - target_Q.detach()).pow(2).mean()
         qf2_loss = (qf2_pred - target_Q.detach()).pow(2).mean()
-        
+
         """
         Actor Training
         """
@@ -211,19 +211,19 @@ class BEARTrainer(TorchTrainer):
             policy_loss = torch.min(q_val1, q_val2)[:, 0]
         elif self.policy_update_style == '1':
             policy_loss = torch.mean(q_val1, q_val2)[:, 0]
-        
+
         if self._n_train_steps_total >= 40000:
             # Now we can update the policy
             if self.mode == 'auto':
-                policy_loss = (-policy_loss + self.log_alpha.exp() * (mmd_loss - self.target_mmd_thresh)).mean()
+                policy_loss = (-policy_loss.detach() + self.log_alpha.exp() * (mmd_loss.detach() - self.target_mmd_thresh)).mean()
             else:
-                policy_loss = (-policy_loss + 100*mmd_loss).mean()
+                policy_loss = (-policy_loss.detach() + 100*mmd_loss.detach()).mean()
         else:
             if self.mode == 'auto':
-                policy_loss = (self.log_alpha.exp() * (mmd_loss - self.target_mmd_thresh)).mean()
+                policy_loss = (self.log_alpha.exp() * (mmd_loss.detach() - self.target_mmd_thresh)).mean()
             else:
-                policy_loss = 100*mmd_loss.mean()
-        
+                policy_loss = 100*mmd_loss.detach().mean()
+
         """
         Update Networks
         """
@@ -245,7 +245,7 @@ class BEARTrainer(TorchTrainer):
             (-policy_loss).backward()
             self.alpha_optimizer.step()
             self.log_alpha.data.clamp_(min=-5.0, max=10.0)
-        
+
         """
         Update networks
         """
@@ -256,7 +256,7 @@ class BEARTrainer(TorchTrainer):
             ptu.soft_update_from_to(
                 self.qf2, self.target_qf2, self.soft_target_tau
             )
-        
+
         """
         Some statistics for eval
         """
@@ -299,9 +299,9 @@ class BEARTrainer(TorchTrainer):
             ))
             if self.mode == 'auto':
                 self.eval_statistics['Alpha'] = self.log_alpha.exp().item()
-        
+
         self._n_train_steps_total += 1
-    
+
     def get_diagnostics(self):
         return self.eval_statistics
 

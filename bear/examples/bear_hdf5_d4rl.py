@@ -10,8 +10,13 @@ from rlkit.torch.sac.bear import BEARTrainer
 from rlkit.torch.networks import FlattenMlp
 from rlkit.torch.torch_rl_algorithm import TorchBatchRLAlgorithm
 import numpy as np
+from tf_agents.environments import tf_py_environment
+from tf_agents.environments import gym_wrapper
+
+from torch import autograd
 
 import h5py, argparse, os
+import ray
 import gym
 import d4rl
 
@@ -45,9 +50,26 @@ def load_hdf5(dataset, replay_buffer, max_size):
     print (replay_buffer._size, replay_buffer._terminals.shape)
 
 
+def env_factory(env_name):
+  gym_env = gym.make(env_name)
+  gym_spec = gym.spec(env_name)
+  if gym_spec.max_episode_steps in [0, None]:  # Add TimeLimit wrapper.
+    gym_env = time_limit.TimeLimit(gym_env, max_episode_steps=1000)
+
+  tf_env = tf_py_environment.TFPyEnvironment(
+      gym_wrapper.GymWrapper(gym_env))
+  return tf_env
+
+# @ray.remote
 def experiment(variant):
     eval_env = gym.make(variant['env_name'])
     expl_env = eval_env
+
+    tf_env = env_factory(variant['env_name'])
+
+    gym_env = tf_env.pyenv.envs[0]
+    #offline_dataset = gym_env.unwrapped.get_dataset()
+    offline_dataset = gym_env.get_dataset(h5path=variant['dataset'])
 
     obs_dim = expl_env.observation_space.low.size
     action_dim = eval_env.action_space.low.size
@@ -76,7 +98,7 @@ def experiment(variant):
     policy = TanhGaussianPolicy(
         obs_dim=obs_dim,
         action_dim=action_dim,
-        hidden_sizes=[M, M,], 
+        hidden_sizes=[M, M,],
     )
     vae_policy = VAEPolicy(
         obs_dim=obs_dim,
@@ -94,13 +116,13 @@ def experiment(variant):
     buffer_filename = None
     if variant['buffer_filename'] is not None:
         buffer_filename = variant['buffer_filename']
-    
+
     replay_buffer = EnvReplayBuffer(
         variant['replay_buffer_size'],
         expl_env,
     )
-    load_hdf5(eval_env.unwrapped.get_dataset(), replay_buffer, max_size=variant['replay_buffer_size'])
-    
+    load_hdf5(offline_dataset, replay_buffer, max_size=variant['replay_buffer_size'])
+
     trainer = BEARTrainer(
         env=eval_env,
         policy=policy,
@@ -123,15 +145,17 @@ def experiment(variant):
         **variant['algorithm_kwargs']
     )
     algorithm.to(ptu.device)
+    autograd.set_detect_anomaly(True)
     algorithm.train()
 
 if __name__ == "__main__":
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(description='BEAR-runs')
     parser.add_argument("--env", type=str, default='halfcheetah-medium-v0')
+    parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--gpu", default='0', type=str)
-    parser.add_argument('--qf_lr', default=3e-4, type=float)
-    parser.add_argument('--policy_lr', default=1e-4, type=float)
+    parser.add_argument('--qf_lr', default=1e-5, type=float)
+    parser.add_argument('--policy_lr', default=1e-5, type=float)
     parser.add_argument('--mmd_sigma', default=50, type=float)
     parser.add_argument('--kernel_type', default='gaussian', type=str)
     parser.add_argument('--target_mmd_thresh', default=0.05, type=float)
@@ -143,16 +167,17 @@ if __name__ == "__main__":
         algorithm="BEAR",
         version="normal",
         layer_size=256,
-        replay_buffer_size=int(2E6),
+        replay_buffer_size=int(2E5),
         buffer_filename=None, #halfcheetah_101000.pkl',
         load_buffer=True,
         env_name=args.env,
+        dataset=args.dataset,
         algorithm_kwargs=dict(
-            num_epochs=3000,
-            num_eval_steps_per_epoch=5000,
-            num_trains_per_train_loop=1000,
-            num_expl_steps_per_train_loop=1000,
-            min_num_steps_before_training=1000,
+            num_epochs=300,
+            num_eval_steps_per_epoch=100,
+            num_trains_per_train_loop=100,
+            num_expl_steps_per_train_loop=100,
+            min_num_steps_before_training=100,
             max_path_length=1000,
             batch_size=256,
             num_actions_sample=args.num_samples,
