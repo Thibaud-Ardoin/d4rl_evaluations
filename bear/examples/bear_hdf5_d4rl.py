@@ -1,4 +1,4 @@
-from gym.envs.mujoco import HalfCheetahEnv, HopperEnv, AntEnv, Walker2dEnv
+#from gym.envs.mujoco import HalfCheetahEnv, HopperEnv, AntEnv, Walker2dEnv
 
 import rlkit.torch.pytorch_util as ptu
 from rlkit.data_management.env_replay_buffer import EnvReplayBuffer
@@ -33,7 +33,7 @@ def load_hdf5(dataset, replay_buffer, max_size):
     _done = np.squeeze(dataset['terminals'][:N-1])
     _done = (np.expand_dims(np.squeeze(_done), axis=-1)).astype(np.int32)
 
-    max_length = 1000
+    max_length = 5000
     ctr = 0
     ## Only for MuJoCo environments
     ## Handle the condition when terminal is not True and trajectory ends due to a timeout
@@ -54,7 +54,7 @@ def env_factory(env_name):
   gym_env = gym.make(env_name)
   gym_spec = gym.spec(env_name)
   if gym_spec.max_episode_steps in [0, None]:  # Add TimeLimit wrapper.
-    gym_env = time_limit.TimeLimit(gym_env, max_episode_steps=1000)
+    gym_env = time_limit.TimeLimit(gym_env, max_episode_steps=5000)
 
   tf_env = tf_py_environment.TFPyEnvironment(
       gym_wrapper.GymWrapper(gym_env))
@@ -154,8 +154,8 @@ if __name__ == "__main__":
     parser.add_argument("--env", type=str, default='halfcheetah-medium-v0')
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--gpu", default='0', type=str)
-    parser.add_argument('--qf_lr', default=1e-5, type=float)
-    parser.add_argument('--policy_lr', default=1e-5, type=float)
+    parser.add_argument('--qf_lr', default=5e-5, type=float)
+    parser.add_argument('--policy_lr', default=5e-5, type=float)
     parser.add_argument('--mmd_sigma', default=50, type=float)
     parser.add_argument('--kernel_type', default='gaussian', type=str)
     parser.add_argument('--target_mmd_thresh', default=0.05, type=float)
@@ -167,13 +167,13 @@ if __name__ == "__main__":
         algorithm="BEAR",
         version="normal",
         layer_size=256,
-        replay_buffer_size=int(2E5),
+        replay_buffer_size=int(2E4),
         buffer_filename=None, #halfcheetah_101000.pkl',
         load_buffer=True,
         env_name=args.env,
         dataset=args.dataset,
         algorithm_kwargs=dict(
-            num_epochs=300,
+            num_epochs=80,
             num_eval_steps_per_epoch=100,
             num_trains_per_train_loop=100,
             num_expl_steps_per_train_loop=100,
@@ -200,6 +200,6 @@ if __name__ == "__main__":
         ),
     )
     rand = np.random.randint(0, 100000)
-    setup_logger(os.path.join('BEAR_launch', str(rand)), variant=variant, base_log_dir='./data')
+    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='all', variant=variant, base_log_dir='./data')
     ptu.set_gpu_mode(False)  # optionally set the GPU (default=False)
     experiment(variant)
