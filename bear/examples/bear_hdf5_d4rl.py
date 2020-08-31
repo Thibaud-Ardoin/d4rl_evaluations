@@ -167,14 +167,14 @@ if __name__ == "__main__":
         algorithm="BEAR",
         version="normal",
         layer_size=256,
-        replay_buffer_size=int(2E4),
+        replay_buffer_size=int(1E5),
         buffer_filename=None, #halfcheetah_101000.pkl',
         load_buffer=True,
         env_name=args.env,
         dataset=args.dataset,
         algorithm_kwargs=dict(
-            num_epochs=80,
-            num_eval_steps_per_epoch=100,
+            num_epochs=500,
+            num_eval_steps_per_epoch=500,
             num_trains_per_train_loop=100,
             num_expl_steps_per_train_loop=100,
             min_num_steps_before_training=100,
@@ -200,6 +200,6 @@ if __name__ == "__main__":
         ),
     )
     rand = np.random.randint(0, 100000)
-    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='all', variant=variant, base_log_dir='./data')
+    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='all', variant=variant, base_log_dir='./data/tests_set/')
     ptu.set_gpu_mode(False)  # optionally set the GPU (default=False)
     experiment(variant)
