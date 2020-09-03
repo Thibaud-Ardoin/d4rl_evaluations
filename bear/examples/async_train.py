@@ -1,14 +1,15 @@
 import ray
 from bear_hdf5_d4rl import *
+from glob import glob
 
 print(' * Bear asynchronous training script * ')
 
 # python async_train.py --env='flow-ring-random-v0' 
 
 @ray.remote
-def launch_train():
+def launch_train(dir, variant):
     rand = np.random.randint(0, 100000)
-    setup_logger(os.path.join('BEAR_launch', str(rand)), variant=variant, base_log_dir='./data')
+    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='gap', variant=variant, base_log_dir='./data/'+dir)
     ptu.set_gpu_mode(False)  # optionally set the GPU (default=False)
     experiment(variant)
 
@@ -17,9 +18,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='BEAR-runs')
     parser.add_argument("--env", type=str, default='halfcheetah-medium-v0')
     parser.add_argument("--dataset", type=str, default=None)
+    parser.add_argument("--dir", type=str, default=None)
     parser.add_argument("--gpu", default='0', type=str)
-    parser.add_argument('--qf_lr', default=3e-4, type=float)
-    parser.add_argument('--policy_lr', default=1e-4, type=float)
+    parser.add_argument('--qf_lr', default=5e-5, type=float)
+    parser.add_argument('--policy_lr', default=5e-5, type=float)
     parser.add_argument('--mmd_sigma', default=50, type=float)
     parser.add_argument('--kernel_type', default='gaussian', type=str)
     parser.add_argument('--target_mmd_thresh', default=0.05, type=float)
@@ -31,14 +33,14 @@ if __name__ == "__main__":
         algorithm="BEAR",
         version="normal",
         layer_size=256,
-        replay_buffer_size=int(2E6),
+        replay_buffer_size=int(1E5),
         buffer_filename=None, #halfcheetah_101000.pkl',
         load_buffer=True,
         env_name=args.env,
         dataset=args.dataset,
         algorithm_kwargs=dict(
-            num_epochs=3000,
-            num_eval_steps_per_epoch=5000,
+            num_epochs=300,
+            num_eval_steps_per_epoch=1000,
             num_trains_per_train_loop=1000,
             num_expl_steps_per_train_loop=1000,
             min_num_steps_before_training=1000,
@@ -63,10 +65,22 @@ if __name__ == "__main__":
 
         ),
     )
-
+    
+    ray.init()
     result_ids = []
-    for i in range(4):
-        result_ids.append(launch_train.remote(i))
+    data_dir = '/home/ubuntu/.d4rl/datasets/remote/flow-ring-v0-idm-noise'
+    noise_type=['1', '2+5', '5', '7+5']
+    datasets=[data_dir + noise_type[k] + '-clean.hdf5' for k in range(4)]
+
+    for i,dataset in enumerate(datasets):
+        print('Go for data: ', dataset)
+        print('Also called dataset N', i)
+        variant['dataset']=dataset
+
+        for j in range(4):
+            print('Start the run N',j)
+            result_ids.append(launch_train.remote(dir='async_noise_'+noise_type[i], variant=variant))
 
 
     results = ray.get(result_ids)
+    print('Result of the multi lunch : ', results)
