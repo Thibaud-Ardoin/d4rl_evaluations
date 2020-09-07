@@ -16,9 +16,9 @@ from tf_agents.environments import gym_wrapper
 from torch import autograd
 
 import h5py, argparse, os
+import d4rl
 import ray
 import gym
-import d4rl
 
 def load_hdf5(dataset, replay_buffer, max_size):
     all_obs = dataset['observations']
@@ -173,11 +173,11 @@ if __name__ == "__main__":
         env_name=args.env,
         dataset=args.dataset,
         algorithm_kwargs=dict(
-            num_epochs=500,
-            num_eval_steps_per_epoch=500,
-            num_trains_per_train_loop=100,
-            num_expl_steps_per_train_loop=100,
-            min_num_steps_before_training=100,
+            num_epochs=300,
+            num_eval_steps_per_epoch=1000,
+            num_trains_per_train_loop=1000,
+            num_expl_steps_per_train_loop=1000,
+            min_num_steps_before_training=1000,
             max_path_length=1000,
             batch_size=256,
             num_actions_sample=args.num_samples,
@@ -199,6 +199,7 @@ if __name__ == "__main__":
 
         ),
     )
+
     rand = np.random.randint(0, 100000)
     setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='all', variant=variant, base_log_dir='./data/tests_set/')
     ptu.set_gpu_mode(False)  # optionally set the GPU (default=False)
