@@ -9,14 +9,14 @@ print(' * Bear asynchronous training script * ')
 @ray.remote
 def launch_train(dir, variant):
     rand = np.random.randint(0, 100000)
-    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='gap', variant=variant, base_log_dir='./data/'+dir)
+    setup_logger(os.path.join('BEAR_launch', str(rand)), snapshot_mode='last', variant=variant, base_log_dir='./data/'+dir)
     ptu.set_gpu_mode(False)  # optionally set the GPU (default=False)
     experiment(variant)
 
 if __name__ == "__main__":
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(description='BEAR-runs')
-    parser.add_argument("--env", type=str, default='halfcheetah-medium-v0')
+    parser.add_argument("--env", type=str, default='flow-ring-v0')
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--dir", type=str, default=None)
     parser.add_argument("--gpu", default='0', type=str)
@@ -68,18 +68,19 @@ if __name__ == "__main__":
     
     ray.init()
     result_ids = []
-    data_dir = '/home/ubuntu/.d4rl/datasets/remote/flow-ring-v0-idm-noise'
-    noise_type=['1', '2+5', '5', '7+5']
-    datasets=[data_dir + noise_type[k] + '-clean.hdf5' for k in range(4)]
+    data_dir = '/home/ubuntu/.d4rl/datasets/remote/flow-ring-v0-all_idm-noise'
+    noise_type=['0+05','0+1', '0+2', '0+5']
+    datasets=[data_dir + noise_type[k] + '-clean.hdf5' for k in range(len(noise_type))]
 
     for i,dataset in enumerate(datasets):
         print('Go for data: ', dataset)
         print('Also called dataset N', i)
         variant['dataset']=dataset
+        variant['env_name']='flow-ring-noise%s-v0' % noise_type[i].replace('+', '.')
 
         for j in range(4):
             print('Start the run N',j)
-            result_ids.append(launch_train.remote(dir='async_noise_'+noise_type[i], variant=variant))
+            result_ids.append(launch_train.remote(dir='async_follower_all_idm'+noise_type[i], variant=variant))
 
 
     results = ray.get(result_ids)
